@@ -52,6 +52,12 @@ app.get('/urls/:shortURL', (req, res) => {
   res.render('urls_show.ejs', templateVars);
 })
 
+app.post('/urls/:shortURL/delete', (req, res) => {
+  const urlShortHand = req.params.shortURL;
+  delete urlDatabase[urlShortHand];
+  res.redirect('/urls');
+});
+
 app.get('/urls.json', (req, res) => {
   res.json(urlDatabase);
 })
