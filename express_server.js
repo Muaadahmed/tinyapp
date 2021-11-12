@@ -22,6 +22,41 @@ app.use(bodyParser.urlencoded({extended: true}));
 
 const users = {};
 
+// The purpose of this function was to get the email and password
+// and authenticate them
+
+const emailPassAuthentication = (userDB, email, password) => {
+  console.log('emailPassAuthentication: ', userDB);
+  console.log('emailPassAuth: ', email);
+  for (let id in userDB) {
+    let user = userDB[id];
+    if (user && user.password === password) {
+      return {data: user, error: null};
+    }
+    // if (!user) {
+    //   return {data: null, error: 'Not Valid Email'};
+    // }
+  
+  }
+  // let user = userDB[];
+  // let userPass = userDB[id][password];
+  // if (!user) {
+  //   return {data: null, error: 'Not Valid Email'};
+  // }
+
+  // if (!userPass) {
+  //   return {data: null, error: 'Not Valid Password'};
+  // }
+
+  // // if (!user) {
+  //   return {data: null, error: 'Not Valid Email'};
+  // }
+
+  // return {data: user[id], error: null};
+  //Include password with hashing later
+  return {data: null, error: 'Not Valid Login'};
+}
+
 const urlDatabase = {
   "b2xVn2": "http://www.lighthouselabs.ca",
   "9sm5xK": "http://www.google.com"
@@ -67,12 +102,19 @@ app.post('/urls/:shortURL/delete', (req, res) => {
 });
 
 app.post('/login', (req, res) => {
-  res.cookie('username', req.body);
-  res.redirect('/urls');
+  console.log('what user sent back; email and password', req.body, 'cookies', req.cookies);
+  const { email, password } = req.body;
+  const { data, error } = emailPassAuthentication(users, email, password);
+  if (!error) {
+    res.cookie('user_id', data.id);
+    return res.redirect('/urls');
+  }
+  res.status(403);
+  res.send(error);
 });
 
 app.post('/logout', (req, res) => {
-  res.clearCookie('username');
+  res.clearCookie('user_id');
   res.redirect('/urls');
 });
 
@@ -81,28 +123,36 @@ app.get('/register', (req, res) => {
 });
 // when we type '/register' in the url the req.body will give us back the
 // form information that the user typed so the email and the password
-// is given back as an object(body parser parses the info to give us back the email and password) when we type req.body(). 
+// is given back as an object(body parser parses the info to give us back the email and password) when we type req.body().
+// User Id is not contained in here, because we are registering, we are setting 
+// the userId so we cannot access it.
 app.post('/register', (req, res) => {
   if (req.body.email === '' || req.body.password === '') {
-    res.statusCode = 404;
-    res.send(res.statusCode);
+    res.status(400);
+    return;
   } else {
     for (let key in users) {
-      if (key === req.cookies.user_id) {
-        res.statusCode = 404;
-        res.send(res.statusCode);
+      if (users[key].email === req.body.email) {
+        res.status(400);
+        res.send('400 user already registered');
+        return;
       }
     }
     let randomShortURL = generateRandomString();
+    const { email, password } = req.body;
     users[randomShortURL] = {
       id: randomShortURL,
-      email: req.body.email,
-      password: req.body.password
+      email,
+      password
     };
     res.cookie('user_id', randomShortURL);
     console.log(users);
     res.redirect('/urls');
   }
+});
+
+app.get('/login', (req, res) => {
+  res.render('login_form');
 });
 
 app.get('/urls.json', (req, res) => {
