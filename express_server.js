@@ -2,6 +2,14 @@ const express = require("express");
 const app = express();
 const PORT = 8080;
 const cookieParser = require('cookie-parser');
+app.use(cookieParser());
+
+app.set("view engine", "ejs");
+
+const bodyParser = require('body-parser');
+app.use(bodyParser.urlencoded({extended: true}));
+
+const bcrypt = require('bcryptjs');
 
 function generateRandomString() {
   let alphanumerics = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -24,13 +32,6 @@ const urlsForUser = (id) => {
   return userUrlObject;
 };
 
-app.use(cookieParser());
-
-app.set("view engine", "ejs");
-
-const bodyParser = require('body-parser');
-app.use(bodyParser.urlencoded({extended: true}));
-
 const users = {};
 
 // The purpose of this function was to get the email and password
@@ -41,30 +42,10 @@ const emailPassAuthentication = (userDB, email, password) => {
   console.log('emailPassAuth: ', email);
   for (let id in userDB) {
     let user = userDB[id];
-    if (user && user.password === password) {
+    if (user && bcrypt.compareSync(password, user.password)) {
       return {data: user, error: null};
     }
-    // if (!user) {
-    //   return {data: null, error: 'Not Valid Email'};
-    // }
-  
   }
-  // let user = userDB[];
-  // let userPass = userDB[id][password];
-  // if (!user) {
-  //   return {data: null, error: 'Not Valid Email'};
-  // }
-
-  // if (!userPass) {
-  //   return {data: null, error: 'Not Valid Password'};
-  // }
-
-  // // if (!user) {
-  //   return {data: null, error: 'Not Valid Email'};
-  // }
-
-  // return {data: user[id], error: null};
-  //Include password with hashing later
   return {data: null, error: 'Not Valid Login'};
 }
 
@@ -214,7 +195,7 @@ app.post('/register', (req, res) => {
     users[randomShortURL] = {
       id: randomShortURL,
       email,
-      password
+      password: bcrypt.hashSync(password, 10)
     };
     res.cookie('user_id', randomShortURL);
     console.log(users);
