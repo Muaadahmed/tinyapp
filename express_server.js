@@ -165,7 +165,10 @@ app.post('/logout', (req, res) => {
 });
 
 app.get('/register', (req, res) => {
-  res.render('register_form');
+  const userId = req.session['user_id'];
+  const user = users[userId];
+  const templateVars = { user };
+  res.render('register_form', templateVars);
 });
 
 
@@ -205,7 +208,10 @@ app.post('/register', (req, res) => {
 });
 
 app.get('/login', (req, res) => {
-  res.render('login_form');
+  const userId = req.session['user_id'];
+  const user = users[userId];
+  const templateVars = { user };
+  res.render('login_form', templateVars);
 });
 
 app.get('/urls.json', (req, res) => {
