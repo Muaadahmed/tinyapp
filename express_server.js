@@ -1,53 +1,53 @@
 const express = require("express");
 const app = express();
-const PORT = 8080;
-const cookieParser = require('cookie-parser');
-app.use(cookieParser());
 
-app.set("view engine", "ejs");
+const PORT = 8080;
 
 const bodyParser = require('body-parser');
 app.use(bodyParser.urlencoded({extended: true}));
 
+var cookieSession = require('cookie-session')
+app.use(cookieSession({
+  name: 'session',
+  keys: ['sadkasdjkajds', 'key2']
+}));
 const bcrypt = require('bcryptjs');
+
+app.set("view engine", "ejs");
+
+const { getUserByEmail } = require('./helpers');
 
 function generateRandomString() {
   let alphanumerics = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
   let randomChar = '';
+
   for (let i = 0; i < 6; i++) {
     let randomNumber = Math.floor(Math.random() * alphanumerics.length - 0);
     randomChar += alphanumerics[randomNumber];
   }
+
   return randomChar;
 };
 
+//returns object of shortURLs that match the sessions user ID
+
 const urlsForUser = (id) => {
   let userUrlObject = {};
+
   for (let shortURL in urlDatabase) {
-    console.log('urlsForUser shortURL: ',shortURL);
     if (urlDatabase[shortURL].userID === id) {
       userUrlObject[shortURL] = urlDatabase[shortURL];
     }
   }
+
   return userUrlObject;
 };
 
+//Identify user credentials
+
 const users = {};
 
-// The purpose of this function was to get the email and password
-// and authenticate them
-
-const emailPassAuthentication = (userDB, email, password) => {
-  console.log('emailPassAuthentication: ', userDB);
-  console.log('emailPassAuth: ', email);
-  for (let id in userDB) {
-    let user = userDB[id];
-    if (user && bcrypt.compareSync(password, user.password)) {
-      return {data: user, error: null};
-    }
-  }
-  return {data: null, error: 'Not Valid Login'};
-}
+// Identify user url ownership 
 
 const urlDatabase = {
   b6UTxQ: {
@@ -60,145 +60,146 @@ const urlDatabase = {
   }
 };
 
-
 app.get('/', (req, res) => {
   res.send("Hello!");
 });
 
 app.get('/urls', (req, res) => {
-  console.log('user Object /urls', req.cookies.user_id);
-  const userId = req.cookies['user_id'];
+  const userId = req.session['user_id'];
   const user = users[userId];
+
   if (!user) {
-    res.status(403).send('User is not Logged in');
+    res.status(403).send('<html><body><b>User is not Logged in</b></body></html>');
   }
-  console.log('userId', userId);
-  let userUrlObject = urlsForUser(userId);
-  
-  const urlDataBaseShortUrls = Object.keys(urlDatabase);
-  // const templateVars  = { DBKeys: urlDatabase, shortURL: urlDataBaseShortUrls, urls: userUrlObject, user};
-  const templateVars  = { urls: userUrlObject, user, userDB: urlDatabase, shortURL: urlDataBaseShortUrls,};
-  console.log(templateVars);
+
+  const userUrlObject = urlsForUser(userId);
+  const templateVars  = { urls: userUrlObject, user };
   res.render('urls_index.ejs', templateVars);
 })
 
 app.get('/urls/new', (req, res) => {
-  const userId = req.cookies['user_id'];
-  console.log('url_new id check: ', req.cookies.user_id);
-  console.log('users object on url_new', users);
+  const userId = req.session['user_id'];
   const user = users[userId];
-  console.log(user);
   const templateVars  = { user };
+
   if (!user) {
     return res.redirect('/login');
   } 
+
   res.render('urls_new', templateVars);
 });
 
 app.post('/urls', (req, res) => {
   let randomShortURL = generateRandomString();
-  //urlDatabase[randomShortURL] = req.body.longURL;  // Log the POST request body to the console
-  urlDatabase[randomShortURL] = {longURL: req.body.longURL, userID: req.cookies.user_id}; 
-  console.log('user_id', req.body.user_id);
-  console.log('urlDatabase', urlDatabase);
-  res.redirect(`/urls/${randomShortURL}`);   // Respond with 'Ok' (we will replace this)    
+  urlDatabase[randomShortURL] = {longURL: req.body.longURL, userID: req.session.user_id}; 
+  res.redirect(`/urls/${randomShortURL}`);     
 });
 
 app.get('/u/:shortURL', (req, res) => {
   const shortUrlVal = req.params.shortURL;
-  console.log('shorURL: ', shortUrlVal);
+
+  //Makes sure that the url is an existing url 
+
   if (!urlDatabase[shortUrlVal]) {
-    return res.status(400).send('shortURL Doesn\'t Exist');
+    return res.status(400).send('<html><body><b>shortURL Doesn\'t Exist</b></body></html>');
   }
-  console.log('longURL before setting value: ', urlDatabase[shortUrlVal]['longURL']);
-  console.log('shorURL object: ', urlDatabase[shortUrlVal]);
+
   const longURLWebsite = urlDatabase[shortUrlVal]['longURL'];
-  console.log('longURL: ', longURLWebsite);
-  //const longURL = urlDatabase[req.params.shortURL]// ????????
   res.redirect(`https://${longURLWebsite}`);
 });
 
 app.get('/urls/:shortURL', (req, res) => {
-  //const templateVars  = { shortURL: req.params.shortURL, longURL: urlDatabase[`${req.params.shortURL}`] }
-  const userId = req.cookies['user_id'];
+  const userId = req.session['user_id'];
   const user = users[userId];
-  const templateVars  = { shortURL: req.params.shortURL, longURL: urlDatabase[req.params.shortURL], userID: req.cookies.user_id, user };
+  const templateVars  = { shortURL: req.params.shortURL, longURL: urlDatabase[req.params.shortURL], userID: req.session.user_id, user };
+
   if (!urlDatabase[req.params.shortURL]) {
-    return res.status(404).send('shortURL Doesn\'t Exist');
+    return res.status(404).send('<html><body><b>shortURL Doesn\'t Exist</b></body></html>');
   }
-  if (Object.keys(urlDatabase).length > 2 && urlDatabase[req.params.shortURL].userID !== req.cookies.user_id) {
-    res.send('shortURL Doesn\'t belong to user');
+
+  // Excludes the two urls that are already in database
+
+  if (Object.keys(urlDatabase).length > 2 && urlDatabase[req.params.shortURL].userID !== req.session.user_id) {
+    res.send('<html><body><b>shortURL Doesn\'t belong to user</b></body></html>');
   }
-  console.log('req: ', req.cookies.user_id);
+
   res.render('urls_show.ejs', templateVars);
 })
 
 app.post('/urls/:shortURL/delete', (req, res) => {
   const urlShortHand = req.params.shortURL;
-  // Deleting the whole object ??
-  //console.log('user ID in urls/short/delete: ', req.cookies.user_id);
-  if (urlDatabase[urlShortHand].userID === req.cookies.user_id) {
+
+  if (urlDatabase[urlShortHand].userID === req.session.user_id) {
     delete urlDatabase[urlShortHand];
   }
+
   res.redirect('/urls');
 });
 
 app.post('/urls/:shortURL', (req, res) => {
   const urlShortHand = req.params.shortURL;
   const urlLongHand = req.body.longURL;
-  console.log('url short hand:', urlShortHand);
-  if (urlDatabase[urlShortHand].userID === req.cookies.user_id) {
+
+  if (urlDatabase[urlShortHand].userID === req.session.user_id) {
     urlDatabase[urlShortHand].longURL = urlLongHand;
   }
+
   res.redirect('/urls');
 });
 
 app.post('/login', (req, res) => {
-  console.log('what user sent back; email and password', req.body, 'cookies', req.cookies);
-  const { email, password } = req.body;
-  const { data, error } = emailPassAuthentication(users, email, password);
+  const { email } = req.body;
+  const { data, error } = getUserByEmail(users, email);
+
   if (!error) {
-    res.cookie('user_id', data.id);
+    req.session.user_id = data.id;
     return res.redirect('/urls');
   }
-  res.status(403);
-  res.send(error);
+  
+  res.status(403).send(`<html><body><b>${error}</b></body></html>`);
 });
 
 app.post('/logout', (req, res) => {
-  res.clearCookie('user_id');
+  req.session.user_id = null;
   res.redirect('/urls');
 });
 
 app.get('/register', (req, res) => {
   res.render('register_form');
 });
-// when we type '/register' in the url the req.body will give us back the
-// form information that the user typed so the email and the password
-// is given back as an object(body parser parses the info to give us back the email and password) when we type req.body().
-// User Id is not contained in here, because we are registering, we are setting 
-// the userId so we cannot access it.
+
+
 app.post('/register', (req, res) => {
+
+  //Checks that the user entered email and password.
+
   if (req.body.email === '' || req.body.password === '') {
     res.status(400);
     return;
   } else {
+
+    //Makes sure user isn't registering with an already created email.
+
     for (let key in users) {
       if (users[key].email === req.body.email) {
         res.status(400);
-        res.send('400 user already registered');
+        res.send('<html><body><b>400 user already registered</b></body></html>');
         return;
       }
     }
+    
     let randomShortURL = generateRandomString();
     const { email, password } = req.body;
+
+    //Registers user
+
     users[randomShortURL] = {
       id: randomShortURL,
       email,
       password: bcrypt.hashSync(password, 10)
     };
-    res.cookie('user_id', randomShortURL);
-    console.log(users);
+
+    req.session.user_id = randomShortURL;
     res.redirect('/urls');
   }
 });
