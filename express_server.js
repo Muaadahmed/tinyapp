@@ -6,7 +6,7 @@ const PORT = 8080;
 const bodyParser = require('body-parser');
 app.use(bodyParser.urlencoded({extended: true}));
 
-var cookieSession = require('cookie-session')
+const cookieSession = require('cookie-session');
 app.use(cookieSession({
   name: 'session',
   keys: ['sadkasdjkajds', 'key2']
@@ -17,7 +17,7 @@ app.set("view engine", "ejs");
 
 const { getUserByEmail } = require('./helpers');
 
-function generateRandomString() {
+const generateRandomString = function() {
   let alphanumerics = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
   let randomChar = '';
 
@@ -47,35 +47,35 @@ const urlsForUser = (id) => {
 
 const users = {};
 
-// Identify user url ownership 
+// Identify user url ownership
 
-const urlDatabase = {
-  b6UTxQ: {
-      longURL: "www.tsn.ca",
-      userID: "aJ48lW"
-  },
-  i3BoGr: {
-      longURL: "www.google.ca",
-      userID: "aJ48lW"
-  }
-};
+const urlDatabase = {};
 
 app.get('/', (req, res) => {
-  res.send("Hello!");
+  const userId = req.session['user_id'];
+  const user = users[userId];
+  if (user) {
+    res.redirect('/urls');
+    return;
+  }
+
+  res.redirect('/login');
 });
 
 app.get('/urls', (req, res) => {
   const userId = req.session['user_id'];
   const user = users[userId];
-
+  console.log('get urls userID', userId);
+  console.log(user);
   if (!user) {
     res.status(403).send('<html><body><b>User is not Logged in</b></body></html>');
+    return;
   }
 
   const userUrlObject = urlsForUser(userId);
   const templateVars  = { urls: userUrlObject, user };
   res.render('urls_index.ejs', templateVars);
-})
+});
 
 app.get('/urls/new', (req, res) => {
   const userId = req.session['user_id'];
@@ -84,28 +84,39 @@ app.get('/urls/new', (req, res) => {
 
   if (!user) {
     return res.redirect('/login');
-  } 
+  }
 
   res.render('urls_new', templateVars);
 });
 
 app.post('/urls', (req, res) => {
   let randomShortURL = generateRandomString();
-  urlDatabase[randomShortURL] = {longURL: req.body.longURL, userID: req.session.user_id}; 
-  res.redirect(`/urls/${randomShortURL}`);     
+  const userId = req.session['user_id'];
+  const user = users[userId];
+
+  if (!user) {
+    res.status(403).send('<html><body><b>User must be Logged in to create url</b></body></html>');
+    return;
+  }
+
+  urlDatabase[randomShortURL] = {longURL: req.body.longURL, userID: req.session.user_id};
+  console.log(urlDatabase);
+  res.redirect(`/urls/${randomShortURL}`);
 });
 
 app.get('/u/:shortURL', (req, res) => {
   const shortUrlVal = req.params.shortURL;
 
-  //Makes sure that the url is an existing url 
+  //Makes sure that the url is an existing url
 
   if (!urlDatabase[shortUrlVal]) {
-    return res.status(400).send('<html><body><b>shortURL Doesn\'t Exist</b></body></html>');
+    res.status(400).send('<html><body><b>shortURL Doesn\'t Exist</b></body></html>');
+    return;
   }
 
   const longURLWebsite = urlDatabase[shortUrlVal]['longURL'];
-  res.redirect(`https://${longURLWebsite}`);
+  longURLWebsite.includes('https://') ? res.redirect(longURLWebsite) :
+    res.redirect(`https://${longURLWebsite}`);
 });
 
 app.get('/urls/:shortURL', (req, res) => {
@@ -119,12 +130,12 @@ app.get('/urls/:shortURL', (req, res) => {
 
   // Excludes the two urls that are already in database
 
-  if (Object.keys(urlDatabase).length > 2 && urlDatabase[req.params.shortURL].userID !== req.session.user_id) {
+  if (urlDatabase[req.params.shortURL].userID !== req.session.user_id) {
     res.send('<html><body><b>shortURL Doesn\'t belong to user</b></body></html>');
   }
 
   res.render('urls_show.ejs', templateVars);
-})
+});
 
 app.post('/urls/:shortURL/delete', (req, res) => {
   const urlShortHand = req.params.shortURL;
@@ -160,7 +171,7 @@ app.post('/login', (req, res) => {
 });
 
 app.post('/logout', (req, res) => {
-  req.session.user_id = null;
+  req.session = null;
   res.redirect('/urls');
 });
 
@@ -168,6 +179,11 @@ app.get('/register', (req, res) => {
   const userId = req.session['user_id'];
   const user = users[userId];
   const templateVars = { user };
+
+  if (user) {
+    res.redirect('/urls');
+    return;
+  }
   res.render('register_form', templateVars);
 });
 
@@ -177,46 +193,51 @@ app.post('/register', (req, res) => {
   //Checks that the user entered email and password.
 
   if (req.body.email === '' || req.body.password === '') {
-    res.status(400);
+    res.status(400).send('<html><body><b>Please Enter Email and Password</b></body></html>');
     return;
-  } else {
-
-    //Makes sure user isn't registering with an already created email.
-
-    for (let key in users) {
-      if (users[key].email === req.body.email) {
-        res.status(400);
-        res.send('<html><body><b>400 user already registered</b></body></html>');
-        return;
-      }
-    }
-    
-    let randomShortURL = generateRandomString();
-    const { email, password } = req.body;
-
-    //Registers user
-
-    users[randomShortURL] = {
-      id: randomShortURL,
-      email,
-      password: bcrypt.hashSync(password, 10)
-    };
-
-    req.session.user_id = randomShortURL;
-    res.redirect('/urls');
   }
+
+  //Makes sure user isn't registering with an already created email.
+
+  for (let key in users) {
+    if (users[key].email === req.body.email) {
+      res.status(400);
+      res.send('<html><body><b>400 user already registered</b></body></html>');
+      return;
+    }
+  }
+  
+  let randomShortURL = generateRandomString();
+  const { email, password } = req.body;
+
+  //Registers user
+
+  users[randomShortURL] = {
+    id: randomShortURL,
+    email,
+    password: bcrypt.hashSync(password, 10)
+  };
+
+  req.session.user_id = randomShortURL;
+  res.redirect('/urls');
 });
 
 app.get('/login', (req, res) => {
   const userId = req.session['user_id'];
   const user = users[userId];
   const templateVars = { user };
+
+  if (user) {
+    res.redirect('/urls');
+    return;
+  }
+  
   res.render('login_form', templateVars);
 });
 
 app.get('/urls.json', (req, res) => {
   res.json(urlDatabase);
-})
+});
 
 app.get('/hello', (req, res) => {
   res.send("<html><body>Hello <b>World</b></body></html>");
