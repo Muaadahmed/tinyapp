@@ -115,8 +115,9 @@ app.get('/u/:shortURL', (req, res) => {
   }
 
   const longURLWebsite = urlDatabase[shortUrlVal]['longURL'];
-  longURLWebsite.includes('https://') ? res.redirect(longURLWebsite) :
-    res.redirect(`https://${longURLWebsite}`);
+  longURLWebsite.includes('https://') ? res.redirect(longURLWebsite) : 
+    longURLWebsite.includes('http://') ? res.redirect(longURLWebsite) :
+      res.redirect(`https://${longURLWebsite}`);
 });
 
 app.get('/urls/:shortURL', (req, res) => {
@@ -161,6 +162,10 @@ app.post('/urls/:shortURL', (req, res) => {
 app.post('/login', (req, res) => {
   const { email } = req.body;
   const { data, error } = getUserByEmail(users, email);
+
+  if (req.body.password === '') {
+    return res.send(`<html><body><b>Please Enter Password</b></body></html>`);
+  }
 
   if (!error) {
     req.session.user_id = data.id;
