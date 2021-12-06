@@ -233,8 +233,7 @@ app.get('/login', (req, res) => {
   const templateVars = { user };
 
   if (user) {
-    res.redirect('/urls');
-    return;
+    return res.redirect('/urls');
   }
   
   res.render('login_form', templateVars);
